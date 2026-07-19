@@ -19,10 +19,9 @@ import type {
 } from '../api/types';
 import { DayDowntimeModal } from '../components/DayDowntimeModal';
 import { Markdown } from '../components/Markdown';
-import { MonitorCard } from '../components/MonitorCard';
 import { incidentImpactLabel, incidentStatusLabel } from '../i18n/labels';
 import { formatDateTime, getBrowserTimeZone } from '../utils/datetime';
-import { Badge, Card, MODAL_OVERLAY_CLASS, MODAL_PANEL_CLASS, ThemeToggle } from '../components/ui';
+import { Badge, Card, MODAL_OVERLAY_CLASS, MODAL_PANEL_CLASS } from '../components/ui';
 
 type BannerStatus = PublicHomepageResponse['banner']['status'];
 type IncidentCardData = IncidentSummary | Incident;
@@ -66,6 +65,16 @@ function getBannerConfig(status: BannerStatus, t: ReturnType<typeof useI18n>['t'
 function monitorGroupLabel(groupName: string | null | undefined, ungroupedLabel: string): string {
   const trimmed = groupName?.trim() ?? '';
   return trimmed.length > 0 ? trimmed : ungroupedLabel;
+}
+
+function getLatencyText(monitor: PublicHomepageResponse['monitors'][number]) {
+  const values = (monitor.heartbeat_strip?.latency_ms ?? []).filter(
+    (value): value is number => value != null,
+  );
+  if (values.length === 0) {
+    return '—';
+  }
+  return `${Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)}ms`;
 }
 
 function MonitorDetail({ monitorId, onClose }: { monitorId: number; onClose: () => void }) {
@@ -313,6 +322,81 @@ function IncidentDetail({
   );
 }
 
+function MonitorListItem({
+  monitor,
+  onSelect,
+}: {
+  monitor: PublicHomepageResponse['monitors'][number];
+  onSelect: () => void;
+}) {
+  const { t } = useI18n();
+  const isDown = monitor.status === 'down';
+  const isMaintenance = monitor.status === 'maintenance';
+  const isPaused = monitor.status === 'paused';
+  const accentClass = isDown
+    ? 'border-red-800/60 bg-red-950/10'
+    : isMaintenance
+      ? 'border-amber-500/30 bg-amber-500/10'
+      : isPaused
+        ? 'border-neutral-800 bg-neutral-900/70'
+        : 'border-neutral-800 bg-neutral-900/70';
+  const dotClass = isDown
+    ? 'bg-red-500 shadow-[0_0_0_6px_rgba(248,113,113,0.16)]'
+    : isMaintenance
+      ? 'bg-amber-500 shadow-[0_0_0_6px_rgba(245,158,11,0.16)]'
+      : isPaused
+        ? 'bg-neutral-500 shadow-[0_0_0_6px_rgba(115,115,115,0.14)]'
+        : 'bg-emerald-500 shadow-[0_0_0_6px_rgba(16,185,129,0.16)]';
+  const statusText = isDown ? 'TIMEOUT' : isMaintenance ? 'MAINT' : isPaused ? 'PAUSED' : 'ONLINE';
+  const latencyText = getLatencyText(monitor);
+  const uptimeBars = (monitor.uptime_day_strip?.uptime_pct_milli ?? []).slice(-10);
+
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex w-full items-center gap-4 border px-4 py-3 text-left transition-colors hover:border-neutral-700 ${accentClass}`}
+    >
+      <div className="flex min-w-0 flex-1 items-start gap-3">
+        <span className={`mt-1 h-2.5 w-2.5 rounded-full ${dotClass}`} />
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-neutral-100">{monitor.name}</div>
+          <div className="mt-1 truncate font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
+            {monitor.display_url ?? t('status_page.services')}
+          </div>
+        </div>
+      </div>
+
+      <div className="hidden flex-1 items-end justify-center gap-1 sm:flex">
+        {uptimeBars.length > 0
+          ? uptimeBars.map((value, index) => {
+              const percent = Math.max(16, Math.min(100, (value ?? 0) / 1000));
+              const barClass = isDown
+                ? 'bg-red-500/80'
+                : isMaintenance
+                  ? 'bg-amber-500/80'
+                  : isPaused
+                    ? 'bg-neutral-600'
+                    : 'bg-emerald-500/80';
+              return (
+                <div key={`${monitor.id}-${index}`} className="flex h-8 w-1.5 items-end rounded-full bg-neutral-800">
+                  <div className={`w-full rounded-full ${barClass}`} style={{ height: `${percent}%` }} />
+                </div>
+              );
+            })
+          : Array.from({ length: 8 }).map((_, index) => (
+              <div key={`${monitor.id}-placeholder-${index}`} className="h-8 w-1.5 rounded-full bg-neutral-800" />
+            ))}
+      </div>
+
+      <div className="text-right">
+        <div className="font-mono text-sm font-medium text-neutral-100">{latencyText}</div>
+        <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">{statusText}</div>
+      </div>
+    </button>
+  );
+}
+
 function StatusPageSkeleton() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
@@ -482,304 +566,150 @@ export function StatusPage() {
 
   const siteTitle = derivedTitle;
   const timeZone = derivedTimeZone;
+  const overviewTitle =
+    data.banner.status === 'major_outage' || data.banner.status === 'partial_outage'
+      ? 'Systems Incident Reported.'
+      : 'All Systems Operational.';
+  const overviewDescription =
+    data.banner.status === 'major_outage'
+      ? 'Critical signals are active across the monitored surface. Updates are being collected and surfaced as the incident evolves.'
+      : data.banner.status === 'partial_outage'
+        ? 'A limited set of monitors is under strain, and the current response is being watched closely.'
+        : data.banner.status === 'maintenance'
+          ? 'A planned maintenance window is in place and the network remains under active observation.'
+          : 'Every monitored endpoint is returning healthy responses, and the global surface is staying within expected thresholds.';
+  const globalUptime =
+    data.monitors.length > 0
+      ? `${(
+          data.monitors.reduce((total, monitor) => total + (monitor.uptime_30d?.uptime_pct ?? 0), 0) /
+          data.monitors.length
+        ).toFixed(2)}%`
+      : '—';
+  const avgLatency =
+    data.monitors.length > 0
+      ? (() => {
+          const values = data.monitors.flatMap((monitor) =>
+            (monitor.heartbeat_strip?.latency_ms ?? []).filter(
+              (value): value is number => value != null,
+            ),
+          );
+          return values.length > 0
+            ? `${Math.round(values.reduce((sum, value) => sum + value, 0) / values.length)}ms`
+            : '—';
+        })()
+      : '—';
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900">
-      {/* Header */}
-      <header className="sticky top-0 z-20 border-b border-slate-200/70 bg-white/95 backdrop-blur dark:border-slate-700/80 dark:bg-slate-800/95">
-        <div className="mx-auto max-w-5xl px-4 py-3 sm:px-6 sm:py-4 lg:px-8 flex justify-between items-center">
-          <Link to="/" className="flex flex-col justify-center min-w-0 min-h-9">
-            <span className="text-xl sm:text-2xl font-bold leading-tight text-slate-900 dark:text-slate-100 truncate">
-              {siteTitle}
+    <div className="min-h-screen bg-neutral-950 text-neutral-100">
+      <header className="sticky top-0 z-20 border-b border-neutral-800/90 bg-neutral-950/90 backdrop-blur">
+        <div className="mx-auto flex max-w-7xl items-end justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="min-w-0">
+            <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-500">
+              AUTOMATIC INFRASTRUCTURE MONITOR
+            </p>
+            <Link to="/" className="mt-1 block text-2xl font-semibold uppercase tracking-[0.35em] text-neutral-100 sm:text-3xl">
+              {siteTitle.toUpperCase()} //
+            </Link>
+          </div>
+          <div className="flex items-center gap-2 border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.35em] text-neutral-400">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/75" />
+              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
             </span>
-            {data.site_description ? (
-              <span className="mt-0.5 text-sm leading-tight text-slate-500 dark:text-slate-400 truncate">
-                {data.site_description}
-              </span>
-            ) : null}
-          </Link>
-          <div className="flex items-center gap-1">
-            <ThemeToggle />
+            STATUS: ONLINE
           </div>
         </div>
       </header>
 
-      {/* Status Banner */}
-      <div>
-        <div className="mx-auto max-w-5xl px-4 pt-7 pb-3 sm:px-6 sm:pt-12 sm:pb-5 lg:px-8 text-center">
-          <div
-            className={`inline-flex items-center justify-center w-9 h-9 sm:w-12 sm:h-12 rounded-full ${bannerConfig.iconBg} text-white text-lg sm:text-2xl mb-2 sm:mb-3`}
-          >
-            {bannerConfig.icon}
-          </div>
-          <h2 className="text-lg sm:text-2xl font-bold mb-1 text-slate-900 dark:text-slate-100">
-            {bannerConfig.text}
-          </h2>
-          {data.banner.source === 'incident' && data.banner.incident && (
-            <p className="text-slate-500 dark:text-slate-400 text-sm px-4">
-              {t('status_page.incident_prefix', { value: data.banner.incident.title })}
-            </p>
-          )}
-          {data.banner.source === 'maintenance' && data.banner.maintenance_window && (
-            <p className="text-slate-500 dark:text-slate-400 text-sm px-4">
-              {t('status_page.maintenance_prefix', { value: data.banner.maintenance_window.title })}
-            </p>
-          )}
-          <p className="text-slate-400 dark:text-slate-500 text-xs mt-2">
-            {t('common.last_updated', {
-              value: formatDateTime(data.generated_at, timeZone, locale),
-            })}
-          </p>
-        </div>
-      </div>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
+          <div className="relative overflow-hidden border border-neutral-800 bg-neutral-900/70 p-6 sm:p-8">
+            <div className="absolute left-0 top-0 h-16 w-1 bg-amber-500" />
+            <div className="absolute right-0 top-0 h-px w-24 bg-neutral-800" />
+            <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">GLOBAL OVERVIEW</p>
+            <h2 className="mt-5 text-3xl font-semibold leading-[0.95] tracking-tight text-neutral-50 sm:text-4xl">
+              {overviewTitle}
+            </h2>
+            <p className="mt-4 max-w-lg text-sm leading-7 text-neutral-400">{overviewDescription}</p>
 
-      <main className="mx-auto max-w-5xl px-4 py-4 sm:px-6 sm:py-7 lg:px-8">
-        {/* Maintenance Windows */}
-        {(data.maintenance_windows.active.length > 0 ||
-          data.maintenance_windows.upcoming.length > 0) && (
-          <section className="mb-6 sm:mb-8">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2.5 sm:mb-3 flex items-center gap-2">
-              <svg
-                className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 dark:text-blue-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-                />
-              </svg>
-              {t('status_page.scheduled_maintenance')}
-            </h3>
-
-            {data.maintenance_windows.active.length > 0 && (
-              <div className="mb-4">
-                <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
-                  {t('common.active')}
+            <div className="mt-8 border-t border-neutral-800 pt-5">
+              <div className="grid gap-6 sm:grid-cols-2">
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">GLOBAL UPTIME</p>
+                  <p className="mt-2 font-mono text-2xl text-neutral-100">{globalUptime}</p>
                 </div>
-                <div className="space-y-3">
-                  {data.maintenance_windows.active.map((w) => (
-                    <Card
-                      key={w.id}
-                      className="p-4 sm:p-5 border-l-4 border-l-blue-500 dark:border-l-blue-400"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-2">
-                        <h4 className="font-semibold text-slate-900 dark:text-slate-100">
-                          {w.title}
-                        </h4>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                          {formatDateTime(w.starts_at, timeZone, locale)} –{' '}
-                          {formatDateTime(w.ends_at, timeZone, locale)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-300 mb-2">
-                        {t('common.affected')}:{' '}
-                        {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
-                      </div>
-                      {w.message && <Markdown text={w.message} />}
-                    </Card>
-                  ))}
+                <div>
+                  <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">AVG LATENCY</p>
+                  <p className="mt-2 font-mono text-2xl text-neutral-100">{avgLatency}</p>
                 </div>
               </div>
-            )}
-
-            {data.maintenance_windows.upcoming.length > 0 && (
-              <div>
-                <div className="text-xs uppercase tracking-wide text-slate-400 dark:text-slate-500 mb-2">
-                  {t('common.upcoming')}
-                </div>
-                <div className="space-y-3">
-                  {data.maintenance_windows.upcoming.map((w) => (
-                    <Card
-                      key={w.id}
-                      className="p-4 sm:p-5 border-l-4 border-l-slate-300 dark:border-l-slate-600"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-2">
-                        <h4 className="font-semibold text-slate-900 dark:text-slate-100">
-                          {w.title}
-                        </h4>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                          {formatDateTime(w.starts_at, timeZone, locale)} –{' '}
-                          {formatDateTime(w.ends_at, timeZone, locale)}
-                        </span>
-                      </div>
-                      <div className="text-sm text-slate-600 dark:text-slate-300">
-                        {t('common.affected')}:{' '}
-                        {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
-                      </div>
-                    </Card>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-        )}
-
-        {/* Active Incidents */}
-        {activeIncidents.length > 0 && (
-          <section className="mb-6 sm:mb-8">
-            <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2.5 sm:mb-3 flex items-center gap-2">
-              <svg
-                className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 dark:text-amber-400"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-                />
-              </svg>
-              {t('status_page.active_incidents')}
-            </h3>
-            <div className="space-y-3">
-              {activeIncidents.map((it) => (
-                <IncidentCard
-                  key={it.id}
-                  incident={it}
-                  timeZone={timeZone}
-                  onClick={() =>
-                    setSelectedIncidentRequest({
-                      incident: it,
-                      resolvedOnly: false,
-                    })
-                  }
-                />
-              ))}
             </div>
-          </section>
-        )}
+          </div>
 
-        {/* Monitors */}
-        <section>
-          <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2.5 sm:mb-3">
-            {t('status_page.services')}
-          </h3>
-          <div className="space-y-5">
+          <div className="space-y-3">
             {groupedMonitors.map((group) => (
-              <div key={group.name}>
-                <div className="mb-2 flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-slate-600 dark:text-slate-300">
+              <div key={group.name} className="border border-neutral-800 bg-neutral-900/70 p-3">
+                <div className="mb-3 flex items-center justify-between border-b border-neutral-800 pb-2">
+                  <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
                     {group.name}
-                  </h4>
-                  <span className="text-xs text-slate-400 dark:text-slate-500">
-                    {group.monitors.length}
-                  </span>
+                  </h3>
+                  <span className="font-mono text-[11px] text-neutral-500">{group.monitors.length}</span>
                 </div>
-                <div className="grid gap-2.5 sm:gap-3 md:grid-cols-2">
+                <div className="space-y-2">
                   {group.monitors.map((monitor) => (
-                    <MonitorCard
+                    <MonitorListItem
                       key={monitor.id}
                       monitor={monitor}
-                      ratingLevel={data.uptime_rating_level}
-                      timeZone={timeZone}
                       onSelect={() => setSelectedMonitorId(monitor.id)}
-                      onDayClick={(dayStartAt) =>
-                        setSelectedDay({ monitorId: monitor.id, dayStartAt })
-                      }
                     />
                   ))}
                 </div>
               </div>
             ))}
-          </div>
-          {data.monitors.length === 0 && (
-            <Card className="p-8 text-center">
-              <p className="text-slate-500 dark:text-slate-400">{t('status_page.no_monitors')}</p>
-            </Card>
-          )}
-        </section>
 
-        <section className="mt-6 pt-5 sm:mt-8 sm:pt-6 border-t border-slate-100 dark:border-slate-800 space-y-6 sm:space-y-8">
-          <div>
-            <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {t('status_page.incident_history')}
-              </h3>
-              <Link
-                to="/history/incidents"
-                className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              >
-                {t('common.view_more')}
-              </Link>
-            </div>
-
-            {resolvedIncidentPreview ? (
-              <IncidentCard
-                incident={resolvedIncidentPreview}
-                timeZone={timeZone}
-                onClick={() =>
-                  setSelectedIncidentRequest({
-                    incident: resolvedIncidentPreview,
-                    resolvedOnly: true,
-                  })
-                }
-              />
-            ) : (
-              <Card className="p-6 text-center">
-                <p className="text-slate-500 dark:text-slate-400">
-                  {t('status_page.no_past_incidents')}
-                </p>
-              </Card>
+            {data.monitors.length === 0 && (
+              <div className="border border-neutral-800 bg-neutral-900/70 p-6 text-center text-sm text-neutral-500">
+                {t('status_page.no_monitors')}
+              </div>
             )}
           </div>
+        </section>
 
-          <div>
-            <div className="flex items-center justify-between mb-2.5 sm:mb-3">
-              <h3 className="text-base sm:text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {t('status_page.maintenance_history')}
+        {activeIncidents.length > 0 && (
+          <section className="mt-6 border-t border-neutral-800 pt-5">
+            <div className="flex items-center justify-between">
+              <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
+                {t('status_page.active_incidents')}
               </h3>
-              <Link
-                to="/history/maintenance"
-                className="text-sm text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200"
-              >
-                {t('common.view_more')}
-              </Link>
+              <span className="font-mono text-[11px] text-neutral-500">{activeIncidents.length}</span>
             </div>
-
-            {maintenanceHistoryPreview ? (
-              <Card className="p-4 sm:p-5">
-                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-4 mb-2">
-                  <h4 className="font-semibold text-slate-900 dark:text-slate-100">
-                    {maintenanceHistoryPreview.title}
-                  </h4>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">
-                    {formatDateTime(maintenanceHistoryPreview.starts_at, timeZone, locale)} –{' '}
-                    {formatDateTime(maintenanceHistoryPreview.ends_at, timeZone, locale)}
+            <div className="mt-3 space-y-2">
+              {activeIncidents.map((incident) => (
+                <button
+                  key={incident.id}
+                  type="button"
+                  onClick={() =>
+                    setSelectedIncidentRequest({
+                      incident,
+                      resolvedOnly: false,
+                    })
+                  }
+                  className="flex w-full items-center justify-between border border-neutral-800 bg-neutral-900/70 px-4 py-3 text-left"
+                >
+                  <span className="text-sm text-neutral-200">{incident.title}</span>
+                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
+                    {formatDateTime(incident.started_at, timeZone, locale)}
                   </span>
-                </div>
-                <div className="text-sm text-slate-600 dark:text-slate-300 mb-2">
-                  {t('common.affected')}:{' '}
-                  {maintenanceHistoryPreview.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
-                </div>
-                {maintenanceHistoryPreview.message && <Markdown text={maintenanceHistoryPreview.message} />}
-              </Card>
-            ) : (
-              <Card className="p-6 text-center">
-                <p className="text-slate-500 dark:text-slate-400">
-                  {t('status_page.no_past_maintenance')}
-                </p>
-              </Card>
-            )}
-          </div>
-        </section>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-slate-800">
-        <div className="mx-auto max-w-5xl px-4 py-3 text-center text-sm text-slate-400 dark:text-slate-500 sm:px-6 sm:py-4 lg:px-8">
-          {t('status_page.powered_by', { value: siteTitle })}
+      <footer className="border-t border-neutral-800 bg-neutral-950/70">
+        <div className="mx-auto max-w-7xl px-4 py-4 text-left text-[11px] uppercase tracking-[0.35em] text-neutral-600 sm:px-6 lg:px-8">
+          POWERED BY CLOUDFLARE WORKERS & D1 // DESIGN BY LXY
         </div>
       </footer>
 
