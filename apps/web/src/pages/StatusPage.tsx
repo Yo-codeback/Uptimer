@@ -622,6 +622,65 @@ export function StatusPage() {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        {(data.maintenance_windows.active.length > 0 ||
+          data.active_incidents.length > 0) && (
+          <section className="mb-6 space-y-3 border-b border-neutral-800 pb-6">
+            {data.maintenance_windows.active.length > 0 && (
+              <div>
+                <h3 className="text-[10px] uppercase tracking-[0.35em] text-blue-400 mb-2.5">
+                  ⚙ {t('common.active')} {t('status_page.scheduled_maintenance')}
+                </h3>
+                <div className="space-y-2">
+                  {data.maintenance_windows.active.map((w) => (
+                    <div
+                      key={w.id}
+                      className="border border-blue-500/40 bg-blue-950/25 px-4 py-3 rounded-sm"
+                    >
+                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                        <span className="text-sm font-medium text-blue-200">{w.title}</span>
+                        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blue-400 whitespace-nowrap">
+                          {formatDateTime(w.starts_at, timeZone, locale)} → {formatDateTime(w.ends_at, timeZone, locale)}
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-blue-300/70">
+                        {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {data.active_incidents.length > 0 && (
+              <div>
+                <h3 className="text-[10px] uppercase tracking-[0.35em] text-amber-400 mb-2.5">
+                  ⚠ {t('status_page.active_incidents')}
+                </h3>
+                <div className="space-y-2">
+                  {data.active_incidents.map((incident) => (
+                    <button
+                      key={incident.id}
+                      type="button"
+                      onClick={() =>
+                        setSelectedIncidentRequest({
+                          incident,
+                          resolvedOnly: false,
+                        })
+                      }
+                      className="flex w-full items-center justify-between border border-amber-500/40 bg-amber-950/25 px-4 py-3 rounded-sm text-left hover:border-amber-500/60 transition-colors"
+                    >
+                      <span className="text-sm font-medium text-amber-200">{incident.title}</span>
+                      <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-400">
+                        {formatDateTime(incident.started_at, timeZone, locale)}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+        )}
+
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
           <div className="relative overflow-hidden border border-neutral-800 bg-neutral-900/70 p-6 sm:p-8">
             <div className="absolute left-0 top-0 h-16 w-1 bg-emerald-500" />
@@ -682,31 +741,6 @@ export function StatusPage() {
               {t('status_page.scheduled_maintenance')}
             </h3>
             <div className="space-y-3">
-              {data.maintenance_windows.active.length > 0 && (
-                <div>
-                  <div className="text-[10px] uppercase tracking-[0.35em] text-neutral-600 mb-2">
-                    {t('common.active')}
-                  </div>
-                  <div className="space-y-2">
-                    {data.maintenance_windows.active.map((w) => (
-                      <div
-                        key={w.id}
-                        className="border border-blue-500/40 bg-blue-950/20 px-4 py-3"
-                      >
-                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                          <span className="text-sm font-medium text-neutral-100">{w.title}</span>
-                          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500 whitespace-nowrap">
-                            {formatDateTime(w.starts_at, timeZone, locale)} – {formatDateTime(w.ends_at, timeZone, locale)}
-                          </span>
-                        </div>
-                        <div className="text-[11px] text-neutral-400">
-                          {t('common.affected')}: {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
               {data.maintenance_windows.upcoming.length > 0 && (
                 <div>
                   <div className="text-[10px] uppercase tracking-[0.35em] text-neutral-600 mb-2">
@@ -721,45 +755,17 @@ export function StatusPage() {
                         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
                           <span className="text-sm font-medium text-neutral-100">{w.title}</span>
                           <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500 whitespace-nowrap">
-                            {formatDateTime(w.starts_at, timeZone, locale)} – {formatDateTime(w.ends_at, timeZone, locale)}
+                            {formatDateTime(w.starts_at, timeZone, locale)} → {formatDateTime(w.ends_at, timeZone, locale)}
                           </span>
                         </div>
                         <div className="text-[11px] text-neutral-400">
-                          {t('common.affected')}: {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+                          {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
                         </div>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
-            </div>
-          </section>
-        )}
-
-        {activeIncidents.length > 0 && (
-          <section className="mt-6 border-t border-neutral-800 pt-5">
-            <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500 mb-3">
-              {t('status_page.active_incidents')}
-            </h3>
-            <div className="space-y-2">
-              {activeIncidents.map((incident) => (
-                <button
-                  key={incident.id}
-                  type="button"
-                  onClick={() =>
-                    setSelectedIncidentRequest({
-                      incident,
-                      resolvedOnly: false,
-                    })
-                  }
-                  className="flex w-full items-center justify-between border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-left hover:border-amber-500/60 transition-colors"
-                >
-                  <span className="text-sm text-neutral-200">{incident.title}</span>
-                  <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
-                    {formatDateTime(incident.started_at, timeZone, locale)}
-                  </span>
-                </button>
-              ))}
             </div>
           </section>
         )}
