@@ -624,7 +624,7 @@ export function StatusPage() {
       <main className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
         <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]">
           <div className="relative overflow-hidden border border-neutral-800 bg-neutral-900/70 p-6 sm:p-8">
-            <div className="absolute left-0 top-0 h-16 w-1 bg-amber-500" />
+            <div className="absolute left-0 top-0 h-16 w-1 bg-emerald-500" />
             <div className="absolute right-0 top-0 h-px w-24 bg-neutral-800" />
             <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">GLOBAL OVERVIEW</p>
             <h2 className="mt-5 text-3xl font-semibold leading-[0.95] tracking-tight text-neutral-50 sm:text-4xl">
@@ -675,15 +675,73 @@ export function StatusPage() {
           </div>
         </section>
 
+        {(data.maintenance_windows.active.length > 0 ||
+          data.maintenance_windows.upcoming.length > 0) && (
+          <section className="mt-6 border-t border-neutral-800 pt-5">
+            <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500 mb-3">
+              {t('status_page.scheduled_maintenance')}
+            </h3>
+            <div className="space-y-3">
+              {data.maintenance_windows.active.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.35em] text-neutral-600 mb-2">
+                    {t('common.active')}
+                  </div>
+                  <div className="space-y-2">
+                    {data.maintenance_windows.active.map((w) => (
+                      <div
+                        key={w.id}
+                        className="border border-blue-500/40 bg-blue-950/20 px-4 py-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                          <span className="text-sm font-medium text-neutral-100">{w.title}</span>
+                          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500 whitespace-nowrap">
+                            {formatDateTime(w.starts_at, timeZone, locale)} – {formatDateTime(w.ends_at, timeZone, locale)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-neutral-400">
+                          {t('common.affected')}: {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {data.maintenance_windows.upcoming.length > 0 && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-[0.35em] text-neutral-600 mb-2">
+                    {t('common.upcoming')}
+                  </div>
+                  <div className="space-y-2">
+                    {data.maintenance_windows.upcoming.map((w) => (
+                      <div
+                        key={w.id}
+                        className="border border-neutral-700 bg-neutral-900/50 px-4 py-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                          <span className="text-sm font-medium text-neutral-100">{w.title}</span>
+                          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500 whitespace-nowrap">
+                            {formatDateTime(w.starts_at, timeZone, locale)} – {formatDateTime(w.ends_at, timeZone, locale)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-neutral-400">
+                          {t('common.affected')}: {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+        )}
+
         {activeIncidents.length > 0 && (
           <section className="mt-6 border-t border-neutral-800 pt-5">
-            <div className="flex items-center justify-between">
-              <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
-                {t('status_page.active_incidents')}
-              </h3>
-              <span className="font-mono text-[11px] text-neutral-500">{activeIncidents.length}</span>
-            </div>
-            <div className="mt-3 space-y-2">
+            <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500 mb-3">
+              {t('status_page.active_incidents')}
+            </h3>
+            <div className="space-y-2">
               {activeIncidents.map((incident) => (
                 <button
                   key={incident.id}
@@ -694,7 +752,7 @@ export function StatusPage() {
                       resolvedOnly: false,
                     })
                   }
-                  className="flex w-full items-center justify-between border border-neutral-800 bg-neutral-900/70 px-4 py-3 text-left"
+                  className="flex w-full items-center justify-between border border-amber-500/40 bg-amber-950/20 px-4 py-3 text-left hover:border-amber-500/60 transition-colors"
                 >
                   <span className="text-sm text-neutral-200">{incident.title}</span>
                   <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
@@ -702,6 +760,64 @@ export function StatusPage() {
                   </span>
                 </button>
               ))}
+            </div>
+          </section>
+        )}
+
+        {resolvedIncidentPreview && (
+          <section className="mt-6 border-t border-neutral-800 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
+                {t('status_page.incident_history')}
+              </h3>
+              <Link
+                to="/history/incidents"
+                className="text-[11px] uppercase tracking-[0.2em] text-neutral-600 hover:text-neutral-400 transition-colors"
+              >
+                {t('common.view_more')}
+              </Link>
+            </div>
+            <button
+              type="button"
+              onClick={() =>
+                setSelectedIncidentRequest({
+                  incident: resolvedIncidentPreview,
+                  resolvedOnly: true,
+                })
+              }
+              className="flex w-full items-center justify-between border border-neutral-700 bg-neutral-900/50 px-4 py-3 text-left hover:border-neutral-600 transition-colors"
+            >
+              <span className="text-sm text-neutral-200">{resolvedIncidentPreview.title}</span>
+              <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500">
+                {formatDateTime(resolvedIncidentPreview.started_at, timeZone, locale)}
+              </span>
+            </button>
+          </section>
+        )}
+
+        {maintenanceHistoryPreview && (
+          <section className="mt-6 border-t border-neutral-800 pt-5">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">
+                {t('status_page.maintenance_history')}
+              </h3>
+              <Link
+                to="/history/maintenance"
+                className="text-[11px] uppercase tracking-[0.2em] text-neutral-600 hover:text-neutral-400 transition-colors"
+              >
+                {t('common.view_more')}
+              </Link>
+            </div>
+            <div className="border border-neutral-700 bg-neutral-900/50 px-4 py-3">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                <span className="text-sm font-medium text-neutral-100">{maintenanceHistoryPreview.title}</span>
+                <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-neutral-500 whitespace-nowrap">
+                  {formatDateTime(maintenanceHistoryPreview.starts_at, timeZone, locale)} – {formatDateTime(maintenanceHistoryPreview.ends_at, timeZone, locale)}
+                </span>
+              </div>
+              <div className="text-[11px] text-neutral-400">
+                {t('common.affected')}: {maintenanceHistoryPreview.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+              </div>
             </div>
           </section>
         )}
