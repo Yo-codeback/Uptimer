@@ -355,7 +355,7 @@ function MonitorListItem({
     <button
       type="button"
       onClick={onSelect}
-      className={`flex w-full items-center gap-4 border px-4 py-3 text-left transition-colors hover:border-neutral-700 ${accentClass}`}
+      className={`flex w-full flex-col gap-3 border px-4 py-3 text-left transition-colors hover:border-neutral-700 ${accentClass} sm:flex-row sm:items-center`}
     >
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <span className={`mt-1 h-2.5 w-2.5 rounded-full ${dotClass}`} />
@@ -367,31 +367,33 @@ function MonitorListItem({
         </div>
       </div>
 
-      <div className="hidden flex-1 items-end justify-center gap-1 sm:flex">
-        {uptimeBars.length > 0
-          ? uptimeBars.map((value, index) => {
-              const percent = Math.max(16, Math.min(100, (value ?? 0) / 1000));
-              const barClass = isDown
-                ? 'bg-red-500/80'
-                : isMaintenance
-                  ? 'bg-amber-500/80'
-                  : isPaused
-                    ? 'bg-neutral-600'
-                    : 'bg-emerald-500/80';
-              return (
-                <div key={`${monitor.id}-${index}`} className="flex h-8 w-1.5 items-end rounded-full bg-neutral-800">
-                  <div className={`w-full rounded-full ${barClass}`} style={{ height: `${percent}%` }} />
-                </div>
-              );
-            })
-          : Array.from({ length: 8 }).map((_, index) => (
-              <div key={`${monitor.id}-placeholder-${index}`} className="h-8 w-1.5 rounded-full bg-neutral-800" />
-            ))}
-      </div>
+      <div className="flex w-full flex-col gap-3 sm:flex-1 sm:flex-row sm:items-end sm:justify-center">
+        <div className="flex w-full items-end gap-1 overflow-x-auto sm:w-auto">
+          {uptimeBars.length > 0
+            ? uptimeBars.map((value, index) => {
+                const percent = Math.max(16, Math.min(100, (value ?? 0) / 1000));
+                const barClass = isDown
+                  ? 'bg-red-500/80'
+                  : isMaintenance
+                    ? 'bg-amber-500/80'
+                    : isPaused
+                      ? 'bg-neutral-600'
+                      : 'bg-emerald-500/80';
+                return (
+                  <div key={`${monitor.id}-${index}`} className="flex h-8 w-1.5 items-end rounded-full bg-neutral-800">
+                    <div className={`w-full rounded-full ${barClass}`} style={{ height: `${percent}%` }} />
+                  </div>
+                );
+              })
+            : Array.from({ length: 8 }).map((_, index) => (
+                <div key={`${monitor.id}-placeholder-${index}`} className="h-8 w-1.5 rounded-full bg-neutral-800" />
+              ))}
+        </div>
 
-      <div className="text-right">
-        <div className="font-mono text-sm font-medium text-neutral-100">{latencyText}</div>
-        <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">{statusText}</div>
+        <div className="flex w-full items-center justify-between text-right sm:w-auto sm:flex-col sm:items-end">
+          <div className="font-mono text-sm font-medium text-neutral-100">{latencyText}</div>
+          <div className="text-[10px] uppercase tracking-[0.3em] text-neutral-500">{statusText}</div>
+        </div>
       </div>
     </button>
   );
@@ -602,7 +604,7 @@ export function StatusPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
       <header className="sticky top-0 z-20 border-b border-neutral-800/90 bg-neutral-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl items-end justify-between gap-4 px-4 py-4 sm:px-6 lg:px-8">
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6 lg:px-8">
           <div className="min-w-0">
             <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-500">
               AUTOMATIC INFRASTRUCTURE MONITOR
@@ -611,7 +613,7 @@ export function StatusPage() {
               {siteTitle.toUpperCase()} //
             </Link>
           </div>
-          <div className="flex items-center gap-2 border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.35em] text-neutral-400">
+          <div className="flex w-full items-center justify-between border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.35em] text-neutral-400 sm:w-auto sm:justify-start">
             <span className="relative flex h-2.5 w-2.5">
               <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/75" />
               <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
@@ -625,59 +627,61 @@ export function StatusPage() {
         {(data.maintenance_windows.active.length > 0 ||
           data.active_incidents.length > 0) && (
           <section className="mb-6 space-y-3 border-b border-neutral-800 pb-6">
-            {data.maintenance_windows.active.length > 0 && (
-              <div>
-                <h3 className="text-[10px] uppercase tracking-[0.35em] text-blue-400 mb-2.5">
-                  ⚙ {t('common.active')} {t('status_page.scheduled_maintenance')}
-                </h3>
-                <div className="space-y-2">
-                  {data.maintenance_windows.active.map((w) => (
-                    <div
-                      key={w.id}
-                      className="border border-blue-500/40 bg-blue-950/25 px-4 py-3 rounded-sm"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
-                        <span className="text-sm font-medium text-blue-200">{w.title}</span>
-                        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blue-400 whitespace-nowrap">
-                          {formatDateTime(w.starts_at, timeZone, locale)} → {formatDateTime(w.ends_at, timeZone, locale)}
-                        </span>
+            <div className="grid gap-3 lg:grid-cols-[1.2fr_1fr]">
+              {data.maintenance_windows.active.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] uppercase tracking-[0.35em] text-blue-400 mb-2.5">
+                    ⚙ {t('common.active')} {t('status_page.scheduled_maintenance')}
+                  </h3>
+                  <div className="space-y-2">
+                    {data.maintenance_windows.active.map((w) => (
+                      <div
+                        key={w.id}
+                        className="border border-blue-500/40 bg-blue-950/25 px-4 py-3 rounded-sm"
+                      >
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between mb-2">
+                          <span className="text-sm font-medium text-blue-200">{w.title}</span>
+                          <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-blue-400 whitespace-nowrap">
+                            {formatDateTime(w.starts_at, timeZone, locale)} → {formatDateTime(w.ends_at, timeZone, locale)}
+                          </span>
+                        </div>
+                        <div className="text-[11px] text-blue-300/70 break-words">
+                          {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
+                        </div>
                       </div>
-                      <div className="text-[11px] text-blue-300/70">
-                        {w.monitor_ids.map((id) => monitorNames.get(id) ?? `#${id}`).join(', ')}
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {data.active_incidents.length > 0 && (
-              <div>
-                <h3 className="text-[10px] uppercase tracking-[0.35em] text-amber-400 mb-2.5">
-                  ⚠ {t('status_page.active_incidents')}
-                </h3>
-                <div className="space-y-2">
-                  {data.active_incidents.map((incident) => (
-                    <button
-                      key={incident.id}
-                      type="button"
-                      onClick={() =>
-                        setSelectedIncidentRequest({
-                          incident,
-                          resolvedOnly: false,
-                        })
-                      }
-                      className="flex w-full items-center justify-between border border-amber-500/40 bg-amber-950/25 px-4 py-3 rounded-sm text-left hover:border-amber-500/60 transition-colors"
-                    >
-                      <span className="text-sm font-medium text-amber-200">{incident.title}</span>
-                      <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-400">
-                        {formatDateTime(incident.started_at, timeZone, locale)}
-                      </span>
-                    </button>
-                  ))}
+              {data.active_incidents.length > 0 && (
+                <div>
+                  <h3 className="text-[10px] uppercase tracking-[0.35em] text-amber-400 mb-2.5">
+                    ⚠ {t('status_page.active_incidents')}
+                  </h3>
+                  <div className="space-y-2">
+                    {data.active_incidents.map((incident) => (
+                      <button
+                        key={incident.id}
+                        type="button"
+                        onClick={() =>
+                          setSelectedIncidentRequest({
+                            incident,
+                            resolvedOnly: false,
+                          })
+                        }
+                        className="flex w-full flex-col gap-2 border border-amber-500/40 bg-amber-950/25 px-4 py-3 rounded-sm text-left hover:border-amber-500/60 transition-colors sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <span className="text-sm font-medium text-amber-200">{incident.title}</span>
+                        <span className="font-mono text-[11px] uppercase tracking-[0.2em] text-amber-400">
+                          {formatDateTime(incident.started_at, timeZone, locale)}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </section>
         )}
 
