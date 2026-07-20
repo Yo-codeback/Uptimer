@@ -568,6 +568,15 @@ export function StatusPage() {
 
   const siteTitle = derivedTitle;
   const timeZone = derivedTimeZone;
+  const activeMaintenanceCount = data.maintenance_windows.active.length;
+  const activeIncidentCount = activeIncidents.length;
+  const highestIncidentImpact = activeIncidents.reduce<Incident['impact']>(
+    (current, incident) => {
+      const rank = { none: 0, minor: 1, major: 2, critical: 3 } as const;
+      return rank[incident.impact] > rank[current] ? incident.impact : current;
+    },
+    'none',
+  );
   const overviewTitle =
     data.banner.status === 'major_outage' || data.banner.status === 'partial_outage'
       ? 'Systems Incident Reported.'
@@ -580,6 +589,32 @@ export function StatusPage() {
         : data.banner.status === 'maintenance'
           ? 'A planned maintenance window is in place and the network remains under active observation.'
           : 'Every monitored endpoint is returning healthy responses, and the global surface is staying within expected thresholds.';
+  const overviewBadge =
+    data.banner.status === 'major_outage'
+      ? 'CRITICAL INCIDENT'
+      : data.banner.status === 'partial_outage'
+        ? 'PARTIAL OUTAGE'
+        : data.banner.status === 'maintenance'
+          ? 'MAINTENANCE'
+          : 'OPERATIONAL';
+  const overviewBadgeClass =
+    data.banner.status === 'major_outage'
+      ? 'bg-red-500 text-white'
+      : data.banner.status === 'partial_outage'
+        ? 'bg-amber-500 text-neutral-950'
+        : data.banner.status === 'maintenance'
+          ? 'bg-blue-500 text-neutral-950'
+          : 'bg-emerald-500 text-neutral-950';
+  const summaryItems = [
+    activeIncidentCount > 0 && {
+      label: `${activeIncidentCount} active incident${activeIncidentCount > 1 ? 's' : ''}`,
+      className: 'bg-amber-950/25 border-amber-500/40 text-amber-200',
+    },
+    activeMaintenanceCount > 0 && {
+      label: `${activeMaintenanceCount} active maintenance${activeMaintenanceCount > 1 ? 's' : ''}`,
+      className: 'bg-blue-950/25 border-blue-500/40 text-blue-200',
+    },
+  ].filter(Boolean) as { label: string; className: string }[];
   const globalUptime =
     data.monitors.length > 0
       ? `${(
@@ -604,22 +639,36 @@ export function StatusPage() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100">
       <header className="sticky top-0 z-20 border-b border-neutral-800/90 bg-neutral-950/90 backdrop-blur">
-        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:flex-row sm:items-end sm:justify-between sm:px-6 lg:px-8">
-          <div className="min-w-0">
-            <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-500">
-              AUTOMATIC INFRASTRUCTURE MONITOR
-            </p>
-            <Link to="/" className="mt-1 block text-2xl font-semibold uppercase tracking-[0.35em] text-neutral-100 sm:text-3xl">
-              {siteTitle.toUpperCase()} //
-            </Link>
+        <div className="mx-auto flex max-w-7xl flex-col gap-4 px-4 py-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.4em] text-neutral-500">
+                AUTOMATIC INFRASTRUCTURE MONITOR
+              </p>
+              <Link to="/" className="mt-1 block text-2xl font-semibold uppercase tracking-[0.35em] text-neutral-100 sm:text-3xl">
+                {siteTitle.toUpperCase()} //
+              </Link>
+            </div>
+            <div className="flex w-full items-center justify-between border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.35em] text-neutral-400 sm:w-auto sm:justify-start">
+              <span className="relative flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/75" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              </span>
+              STATUS: ONLINE
+            </div>
           </div>
-          <div className="flex w-full items-center justify-between border border-neutral-800 bg-neutral-900/80 px-3 py-2 text-[10px] uppercase tracking-[0.35em] text-neutral-400 sm:w-auto sm:justify-start">
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/75" />
-              <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            </span>
-            STATUS: ONLINE
-          </div>
+          {summaryItems.length > 0 && (
+            <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+              {summaryItems.map((item) => (
+                <div
+                  key={item.label}
+                  className={`inline-flex items-center justify-center rounded-sm border px-3 py-2 text-[11px] uppercase tracking-[0.35em] ${item.className}`}
+                >
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
@@ -689,11 +738,32 @@ export function StatusPage() {
           <div className="relative overflow-hidden border border-neutral-800 bg-neutral-900/70 p-6 sm:p-8">
             <div className="absolute left-0 top-0 h-16 w-1 bg-emerald-500" />
             <div className="absolute right-0 top-0 h-px w-24 bg-neutral-800" />
-            <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">GLOBAL OVERVIEW</p>
-            <h2 className="mt-5 text-3xl font-semibold leading-[0.95] tracking-tight text-neutral-50 sm:text-4xl">
-              {overviewTitle}
-            </h2>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.35em] text-neutral-500">GLOBAL OVERVIEW</p>
+                <h2 className="mt-5 text-3xl font-semibold leading-[0.95] tracking-tight text-neutral-50 sm:text-4xl">
+                  {overviewTitle}
+                </h2>
+              </div>
+              <span className={`inline-flex rounded-sm px-3 py-2 text-[10px] uppercase tracking-[0.35em] ${overviewBadgeClass}`}>
+                {overviewBadge}
+              </span>
+            </div>
             <p className="mt-4 max-w-lg text-sm leading-7 text-neutral-400">{overviewDescription}</p>
+            {(activeIncidentCount > 0 || activeMaintenanceCount > 0) && (
+              <div className="mt-4 flex flex-wrap gap-2">
+                {activeIncidentCount > 0 && (
+                  <span className="inline-flex items-center rounded-sm border border-amber-500/40 bg-amber-950/25 px-3 py-2 text-[11px] uppercase tracking-[0.35em] text-amber-200">
+                    {activeIncidentCount} active incident{activeIncidentCount > 1 ? 's' : ''}
+                  </span>
+                )}
+                {activeMaintenanceCount > 0 && (
+                  <span className="inline-flex items-center rounded-sm border border-blue-500/40 bg-blue-950/25 px-3 py-2 text-[11px] uppercase tracking-[0.35em] text-blue-200">
+                    {activeMaintenanceCount} active maintenance{activeMaintenanceCount > 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+            )}
 
             <div className="mt-8 border-t border-neutral-800 pt-5">
               <div className="grid gap-6 sm:grid-cols-2">
